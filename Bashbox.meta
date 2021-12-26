@@ -1,0 +1,14 @@
+NAME="mpvsix"
+CODENAME="mpvsix"
+AUTHORS=("AXON <axonasif@gmail.com>")
+VERSION="1.0"
+DEPENDENCIES=(
+    std::0.2.0
+)
+REPOSITORY=""
+BASHBOX_COMPAT="0.3.7~"
+
+bashbox_after_build() {
+	cp "$_target_workfile" "$_arg_path/$CODENAME";
+	chmod +x "$_arg_path/$CODENAME";
+}

@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+main@bashbox%9826 () 
+{ 
+    function process::self::exit () 
+    { 
+        local _r=$?;
+        kill -USR1 "$___self_PID";
+        exit $_r
+    };
+    function process::self::forcekill () 
+    { 
+        exec 2> /dev/null;
+        kill -9 "$___self_PID"
+    };
+    function log::error () 
+    { 
+        local _retcode="${2:-$?}";
+        local _exception_line="$1";
+        local _source="${BB_ERR_SOURCE:-"${BASH_SOURCE[-1]}"}";
+        if [[ ! "$_exception_line" == "("*")" ]]; then
+            { 
+                echo -e "[!!!] \033[1;31merror\033[0m[$_retcode]: ${_source##*/}[$BASH_LINENO]: ${BB_ERR_MSG:-"$_exception_line"}" 1>&2;
+                if test -v BB_ERR_MSG; then
+                    { 
+                        echo -e "STACK TRACE: (TOKEN: $_exception_line)" 1>&2;
+                        local -i _frame=0;
+                        local _treestack='|--';
+                        local _line _caller _source;
+                        while read -r _line _caller _source < <(caller "$_frame"); do
+                            { 
+                                echo "$_treestack ${_caller} >> ${_source##*/}::${_line}" 1>&2;
+                                _frame+=1;
+                                _treestack+='--'
+                            };
+                        done
+                    };
+                fi
+            };
+        else
+            { 
+                echo -e "[!!!] \033[1;31merror\033[0m[$_retcode]: ${_source##*/}[$BASH_LINENO]: SUBSHELL EXITED WITH NON-ZERO STATUS" 1>&2
+            };
+        fi;
+        return "$_retcode"
+    };
+    \command \unalias -a || exit;
+    trap 'exit' USR1;
+    trap 'BB_ERR_MSG="UNCAUGHT EXCEPTION" log::error "$BASH_COMMAND" || process::self::exit' ERR;
+    set -eEuT -o pipefail;
+    shopt -s inherit_errexit expand_aliases;
+    ___self="$0";
+    ___self_PID="$$";
+    ___MAIN_FUNCNAME="main@bashbox%9826";
+    ___self_NAME="mpvsix";
+    ___self_CODENAME="mpvsix";
+    ___self_AUTHORS=("AXON <axonasif@gmail.com>");
+    ___self_VERSION="1.0";
+    ___self_DEPENDENCIES=(std::0.2.0);
+    ___self_REPOSITORY="";
+    ___self_BASHBOX_COMPAT="0.3.7~";
+    function bashbox_after_build () 
+    { 
+        cp "$_target_workfile" "$_arg_path/$CODENAME";
+        chmod +x "$_arg_path/$CODENAME"
+    };
+    function log::info () 
+    { 
+        echo -e "[%%%] \033[1;37minfo\033[0m: $@"
+    };
+    function log::warn () 
+    { 
+        echo -e "[***] \033[1;37mwarn\033[0m: $@"
+    };
+    declare -r _marketplace_prefix="https://marketplace.visualstudio.com/items?itemName=";
+    declare _vscode_ext_dir && _vscode_ext_dir="$(
+	if command -v code 1>/dev/null; then {
+		for _dir in '.vscode-remote' '.vscode-web' '.vscode'; do {
+			if test -e "$HOME/$_dir"; then {
+				printf '%s\n' "$HOME/$_dir/extensions";
+				break;
+			} else {
+				continue;
+			} fi
+		} done
+	} else {
+		printf '%s\n' "$HOME/.vscode-remote/extensions";
+	} fi
+)";
+    function install_mp_ext () 
+    { 
+        declare -r _vsix_id="${1##*=}";
+        local _ext_author _ext_codename _ext_version _dw_link;
+        IFS='.' read -r _ext_author _ext_codename <<< "$_vsix_id";
+        declare -r _vsix_page_url="${_marketplace_prefix}$_vsix_id";
+        log::info "Getting version information for $_vsix_id";
+        [[ "$(curl -sL "$_vsix_page_url")" =~ \"VersionValue\":\"[0-9]+?.?[0-9]+?.?[0-9]+?\" ]] && _ext_version="$(sed -E 's/.*"([^"]+)".*/\1/' <<<"${BASH_REMATCH[0]}")";
+        _dw_link="$(printf 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/%s/vsextensions/%s/%s/vspackage\n' "$_ext_author" "$_ext_codename" "$_ext_version")";
+        declare _tmp_dir="/tmp/.${RANDOM}_$$";
+        local _dw_file="$_tmp_dir/pkg.vsix";
+        rm -rf "$_tmp_dir" && mkdir -p "$_tmp_dir";
+        trap "rm -rf $_tmp_dir" ERR EXIT;
+        log::info "Downloading $_vsix_id";
+        wget -q "$_dw_link" -O - | gzip -dc > "$_dw_file";
+        if command -v code > /dev/null; then
+            { 
+                log::info "Installing $_vsix_id natively";
+                code --install-extension "$_dw_file" > /dev/null
+            };
+        else
+            { 
+                log::info "Installing $_vsix_id in docker mode";
+                declare _ext_dir="${_vscode_ext_dir}/${_vsix_id,,}-${_ext_version}";
+                rm -rf "$_ext_dir";
+                unzip -qqo "$_dw_file" -d "$_tmp_dir";
+                mv "$_tmp_dir/extension" "$_ext_dir"
+            };
+        fi;
+        rm -rf "$_tmp_dir"
+    };
+    function main () 
+    { 
+        declare -r _inputs=("$@");
+        for _input in "${_inputs[@]}";
+        do
+            { 
+                install_mp_ext "$_input" &
+            };
+        done;
+        wait
+    };
+    main "$@";
+    exit
+}
+main@bashbox%9826 "$@";
